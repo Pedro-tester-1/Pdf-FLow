@@ -1,0 +1,143 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Pages</title>
+  <link rel="stylesheet" href="{% static 'bootstrap/css/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <script src="{% static 'bootstrap/js/bootstrap.min.js' %}"></script>
+</head>
+<body>
+  <div class="container mt-3">
+    <h2>Páginas</h2>
+    <table class="table table-bordered table-hover text-center align-middle bg-white">
+      <thead class="table-light">
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Fecha</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for page in pages %}
+        <tr>
+          <td>{{ page.id }}</td>
+          <td>
+            <span class="text-primary" style="cursor:pointer;" data-pageid="{{ page.id }}" data-pagename="{{ page.name }}" data-pagestate="{{ page.state }}" onclick="openSvg(this)">
+              {{ page.name }}
+            </span>
+          </td>
+          <td>{{ page.date }}</td>
+          <td>
+            {% if page.state == 0 %}
+              <i class="bi bi-circle" style="color:blue;" title="Open"></i>
+            {% elif page.state == 1 %}
+              <i class="bi bi-check-circle-fill" style="color:green;" title="Approved"></i>
+            {% else %}
+              <i class="bi bi-x-circle-fill" style="color:red;" title="Rejected"></i>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+<!-- Modal SVG -->
+<div class="modal fade" id="modalSvg" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalSvgTitle"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center" id="modalSvgBody" style="overflow:auto; max-height:65vh;">
+        <p class="text-muted">Cargando...</p>
+      </div>
+      <div class="modal-footer justify-content-start">
+        <span class="me-2 fw-semibold">Estado:</span>
+        <div class="btn-group" role="group" id="stateButtons">
+          <button type="button" class="btn btn-sm state-btn" data-state="0" style="border-color:#0d6efd; color:#0d6efd;">
+            <i class="bi bi-circle"></i> Open
+          </button>
+          <button type="button" class="btn btn-sm state-btn" data-state="1" style="border-color:#198754; color:#198754;">
+            <i class="bi bi-check-circle-fill"></i> Approved
+          </button>
+          <button type="button" class="btn btn-sm state-btn" data-state="2" style="border-color:#dc3545; color:#dc3545;">
+            <i class="bi bi-x-circle-fill"></i> Rejected
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentPageId = null;
+
+function openSvg(el) {
+  currentPageId = el.dataset.pageid;
+  const pagename = el.dataset.pagename;
+  const pagestate = parseInt(el.dataset.pagestate);
+
+  document.getElementById('modalSvgTitle').textContent = pagename;
+  const body = document.getElementById('modalSvgBody');
+  body.innerHTML = '<p class="text-muted">Cargando...</p>';
+
+  // Marcar estado activo
+  document.querySelectorAll('.state-btn').forEach(btn => {
+    const s = parseInt(btn.dataset.state);
+    btn.classList.toggle('active-state', s === pagestate);
+    btn.style.fontWeight = s === pagestate ? 'bold' : 'normal';
+    btn.style.opacity = s === pagestate ? '1' : '0.5';
+  });
+
+  fetch('/pdfflow/page_svg/' + currentPageId + '/')
+    .then(r => {
+      if (!r.ok) throw new Error('No encontrado');
+      return r.text();
+    })
+    .then(svg => { body.innerHTML = svg; })
+    .catch(() => { body.innerHTML = '<p class="text-danger">No se encontró el archivo SVG.</p>'; });
+
+  new bootstrap.Modal(document.getElementById('modalSvg')).show();
+}
+
+document.getElementById('stateButtons').addEventListener('click', function(e) {
+  const btn = e.target.closest('.state-btn');
+  if (!btn || !currentPageId) return;
+  const newState = btn.dataset.state;
+
+  fetch('{% url "toggle_page_state" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': '{{ csrf_token }}' },
+    body: 'pageid=' + currentPageId + '&state=' + newState
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      // Actualizar botones
+      document.querySelectorAll('.state-btn').forEach(b => {
+        const s = parseInt(b.dataset.state);
+        b.style.fontWeight = s === data.state ? 'bold' : 'normal';
+        b.style.opacity = s === data.state ? '1' : '0.5';
+      });
+      // Actualizar ícono en la tabla
+      const row = document.querySelector(`[data-pageid="${currentPageId}"]`);
+      if (row) {
+        row.dataset.pagestate = data.state;
+        const td = row.closest('tr').querySelector('td:last-child i');
+        if (td) {
+          if (data.state === 0) { td.className = 'bi bi-circle'; td.style.color = 'blue'; td.title = 'Open'; }
+          else if (data.state === 1) { td.className = 'bi bi-check-circle-fill'; td.style.color = 'green'; td.title = 'Approved'; }
+          else { td.className = 'bi bi-x-circle-fill'; td.style.color = 'red'; td.title = 'Rejected'; }
+        }
+      }
+    }
+  });
+});
+</script>
+</body>
+</html>

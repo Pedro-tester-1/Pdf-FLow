@@ -1,0 +1,371 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+ <head>
+ <meta charset="utf-8">
+   <title>Jobs</title>
+   <link rel="stylesheet" href="{% static 'bootstrap/css/bootstrap.min.css' %}">   
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+     
+   <script src="{% static 'bootstrap/js/bootstrap.min.js' %}"></script>   
+
+ </head>
+ <body>
+ {% block content %}
+   <div class="top-bar">
+       <div class="user-info">
+           <span class="fw-bold">{{ user.first_name }} {{ user.last_name }}</span>
+           <form action="{% url 'logout' %}" method="post">
+               {% csrf_token %}
+               <button type="submit" class="btn btn-outline-danger btn-sm">
+                   <i class="bi bi-box-arrow-right"></i> Logout
+               </button>
+           </form>
+       </div>
+   </div>
+
+   <div class="page-header d-flex align-items-center justify-content-between">
+      <h2>Trabajos</h2>
+      <div class="d-flex align-items-center gap-3">
+        <a href="{% url 'versions' %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-tag"></i> Versiones
+        </a>
+        <span class="act-btn text-primary" title="Cargar desde input/" style="cursor: pointer; font-size: 25px;" id="btnPlus">
+            <i class="bi bi-plus-circle-fill fs-1"></i>
+        </span>
+      </div>
+  </div>
+   <div class="table-responsive mt-3">
+       <table class="table table-bordered table-hover text-center align-middle bg-white">
+           <thead class="table-light">
+               <tr>
+                   <th>ID</th>
+                   <th>Trabajo</th>
+                   <th>Fecha</th>
+                   <th>Estado</th>
+                   <th>Acción</th>
+               </tr>
+           </thead>
+           <tbody>
+               {% for job in jobs %}
+               <tr data-jobid="{{ job.id }}">
+                   <td class="clickable">
+                       <a href="{% url 'pages' jobid=job.id %}">{{ job.id }}</a>
+                   </td>
+                   <td>{{ job.name }}</td>
+                    <td>{{ job.date }}</td>
+                   <td>
+                       {% if job.state == 0 %}
+                            <i class="bi bi-circle toggle-state" style="color:blue; cursor:pointer; font-size:1.3rem;" title="Open" data-jobid="{{ job.id }}"></i>
+                       {% elif job.state == 1 %}
+                           <i class="bi bi-check-circle-fill toggle-state" style="color:green; cursor:pointer; font-size:1.3rem;" title="Closed" data-jobid="{{ job.id }}"></i>
+                       {% endif %}
+                   </td>
+                   <td>
+                     <span class="act-btn delete-job text-danger" title="Borrar Trab." style="cursor: pointer; font-size: 25px;">
+                         <i class="bi bi-trash-fill fs-5"></i>
+                     </span>
+                   </td>
+               </tr>
+               {% endfor %}
+           </tbody>
+       </table>
+   </div>
+   {% endblock %}
+
+ <!-- Modal Elegir tipo -->
+ <div class="modal fade" id="modalElegir" tabindex="-1" aria-hidden="true">
+   <div class="modal-dialog modal-sm">
+     <div class="modal-content">
+       <div class="modal-header">
+         <h5 class="modal-title">Agregar Pages</h5>
+         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+       </div>
+       <div class="modal-body d-flex gap-2 justify-content-center">
+         <button type="button" class="btn btn-primary" id="btnIrNuevo">Nuevo</button>
+         <button type="button" class="btn btn-secondary" id="btnIrExistente">Ya existente</button>
+       </div>
+     </div>
+   </div>
+ </div>
+
+ <!-- Modal Nuevo Job -->
+ <div class="modal fade" id="modalNuevoJob" tabindex="-1" aria-labelledby="modalNuevoJobLabel" aria-hidden="true">
+   <div class="modal-dialog">
+     <div class="modal-content">
+       <div class="modal-header">
+         <h5 class="modal-title" id="modalNuevoJobLabel">Nuevo Job</h5>
+         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+       </div>
+       <div class="modal-body">
+         <div id="modal-error" class="alert alert-danger d-none"></div>
+         <div class="mb-3">
+           <label for="jobname" class="form-label">Nombre del Job</label>
+           <input type="text" class="form-control" id="jobname" required>
+         </div>
+         <div class="mb-3">
+           <label for="pdffiles" class="form-label">Archivos PDF</label>
+           <input type="file" class="form-control" id="pdffiles" accept=".pdf" multiple required>
+         </div>
+       </div>
+       <div class="modal-footer">
+         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+         <button type="button" class="btn btn-primary" id="btnCrearJob">Crear Job</button>
+       </div>
+     </div>
+   </div>
+ </div>
+
+ <!-- Modal Ya Existente -->
+ <div class="modal fade" id="modalExistente" tabindex="-1" aria-hidden="true">
+   <div class="modal-dialog">
+     <div class="modal-content">
+       <div class="modal-header">
+         <h5 class="modal-title">Agregar a Job existente</h5>
+         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+       </div>
+       <div class="modal-body">
+         <div id="modal-error-existente" class="alert alert-danger d-none"></div>
+         <div class="mb-3">
+           <label for="jobselect" class="form-label">Selecciona el Job</label>
+           <select class="form-select" id="jobselect">
+             {% for job in jobs %}
+             <option value="{{ job.id }}">{{ job.name }}</option>
+             {% endfor %}
+           </select>
+         </div>
+         <div class="mb-3">
+           <label for="pdffiles-existente" class="form-label">Archivos PDF</label>
+           <input type="file" class="form-control" id="pdffiles-existente" accept=".pdf" multiple required>
+         </div>
+       </div>
+       <div class="modal-footer">
+         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+         <button type="button" class="btn btn-primary" id="btnAgregarPages">Agregar Pages</button>
+       </div>
+     </div>
+   </div>
+ </div>
+
+ <script type="text/javascript">
+   // Helper: obtiene instancia existente o crea una nueva
+   function getModal(id) {
+       const el = document.getElementById(id);
+       return bootstrap.Modal.getInstance(el) || new bootstrap.Modal(el);
+   }
+
+   function hideModal(id) {
+       const el = document.getElementById(id);
+       const instance = bootstrap.Modal.getInstance(el);
+       if (instance) instance.hide();
+   }
+
+   // Botón + escanea la carpeta input/ y crea jobs/pages
+   document.getElementById('btnPlus').onclick = function() {
+       const btn = this;
+       btn.style.pointerEvents = 'none';
+       btn.style.opacity = '0.5';
+       fetch('{% url "scan_input" %}', {
+           method: 'POST',
+           headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+       })
+       .then(r => r.json())
+       .then(data => {
+           btn.style.pointerEvents = '';
+           btn.style.opacity = '';
+           if (data.ok) {
+               let msg = `Jobs: ${data.jobs}, Pages nuevas: ${data.pages}`;
+               if (data.errors && data.errors.length > 0) {
+                   msg += '\nErrores:\n' + data.errors.join('\n');
+               }
+               alert(msg);
+               window.location.reload();
+           } else {
+               alert('Error: ' + (data.error || 'desconocido'));
+           }
+       })
+       .catch(() => {
+           btn.style.pointerEvents = '';
+           btn.style.opacity = '';
+           alert('Error de conexión.');
+       });
+   };
+
+   // Ctrl++ / Ctrl+= abre el modal de cargar trabajos
+   document.addEventListener('keydown', function(e) {
+       if (e.ctrlKey && (e.key === '+' || e.key === '=')) {
+           e.preventDefault();
+           getModal('modalElegir').show();
+       }
+   });
+
+   // Modal elegir tipo → navegar a Nuevo
+   document.getElementById('btnIrNuevo').onclick = function() {
+       const elegir = document.getElementById('modalElegir');
+       elegir.addEventListener('hidden.bs.modal', function onHide() {
+           elegir.removeEventListener('hidden.bs.modal', onHide);
+           getModal('modalNuevoJob').show();
+       }, { once: true });
+       hideModal('modalElegir');
+   };
+
+   // Modal elegir tipo → navegar a Existente
+   document.getElementById('btnIrExistente').onclick = function() {
+       const elegir = document.getElementById('modalElegir');
+       elegir.addEventListener('hidden.bs.modal', function onHide() {
+           elegir.removeEventListener('hidden.bs.modal', onHide);
+           getModal('modalExistente').show();
+       }, { once: true });
+       hideModal('modalElegir');
+   };
+
+   // Crear Job nuevo
+   document.getElementById("btnCrearJob").onclick = function() {
+       const jobname = document.getElementById("jobname").value.trim();
+       const files = document.getElementById("pdffiles").files;
+       const errorDiv = document.getElementById("modal-error");
+       const btn = this;
+
+       if (!jobname || files.length === 0) {
+           errorDiv.textContent = 'Completa el nombre y selecciona al menos un PDF.';
+           errorDiv.classList.remove('d-none');
+           return;
+       }
+       errorDiv.classList.add('d-none');
+       btn.disabled = true;
+       btn.textContent = 'Creando...';
+
+       const formData = new FormData();
+       formData.append('jobname', jobname);
+       for (let f of files) { formData.append('pdfs', f); }
+
+       fetch('{% url "load_jobs" %}', {
+           method: 'POST',
+           headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+           body: formData
+       })
+       .then(r => r.json())
+       .then(data => {
+           if (data.ok) {
+               hideModal('modalNuevoJob');
+               window.location.reload();
+           } else {
+               errorDiv.textContent = data.error || 'Error al crear el job.';
+               errorDiv.classList.remove('d-none');
+               btn.disabled = false;
+               btn.textContent = 'Crear Job';
+           }
+       })
+       .catch(() => {
+           errorDiv.textContent = 'Error de conexión. Intenta de nuevo.';
+           errorDiv.classList.remove('d-none');
+           btn.disabled = false;
+           btn.textContent = 'Crear Job';
+       });
+   };
+
+   document.getElementById('modalNuevoJob').addEventListener('hidden.bs.modal', function() {
+       document.getElementById("jobname").value = '';
+       document.getElementById("pdffiles").value = '';
+       document.getElementById("modal-error").classList.add('d-none');
+       document.getElementById("btnCrearJob").disabled = false;
+       document.getElementById("btnCrearJob").textContent = 'Crear Job';
+   });
+
+   // Agregar pages a job existente
+   document.getElementById('btnAgregarPages').onclick = function() {
+       const jobid = document.getElementById('jobselect').value;
+       const files = document.getElementById('pdffiles-existente').files;
+       const errorDiv = document.getElementById('modal-error-existente');
+       const btn = this;
+
+       if (!jobid || files.length === 0) {
+           errorDiv.textContent = 'Selecciona un job y al menos un PDF.';
+           errorDiv.classList.remove('d-none');
+           return;
+       }
+       errorDiv.classList.add('d-none');
+       btn.disabled = true;
+       btn.textContent = 'Agregando...';
+
+       const formData = new FormData();
+       formData.append('jobid', jobid);
+       for (let f of files) { formData.append('pdfs', f); }
+
+       fetch('{% url "add_pages_to_job" %}', {
+           method: 'POST',
+           headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+           body: formData
+       })
+       .then(r => r.json())
+       .then(data => {
+           if (data.ok) {
+               hideModal('modalExistente');
+               window.location.reload();
+           } else {
+               errorDiv.textContent = data.error || 'Error al agregar pages.';
+               errorDiv.classList.remove('d-none');
+               btn.disabled = false;
+               btn.textContent = 'Agregar Pages';
+           }
+       })
+       .catch(() => {
+           errorDiv.textContent = 'Error de conexión. Intenta de nuevo.';
+           errorDiv.classList.remove('d-none');
+           btn.disabled = false;
+           btn.textContent = 'Agregar Pages';
+       });
+   };
+
+   document.getElementById('modalExistente').addEventListener('hidden.bs.modal', function() {
+       document.getElementById('pdffiles-existente').value = '';
+       document.getElementById('modal-error-existente').classList.add('d-none');
+       document.getElementById('btnAgregarPages').disabled = false;
+       document.getElementById('btnAgregarPages').textContent = 'Agregar Pages';
+   });
+
+   document.querySelector("tbody").addEventListener("click", function(e) {
+       let toggleBtn = e.target.closest(".toggle-state");
+       if (toggleBtn) {
+           const jobid = toggleBtn.dataset.jobid;
+           fetch('{% url "toggle_job_state" %}', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': '{{ csrf_token }}' },
+               body: 'jobid=' + jobid
+           })
+           .then(r => r.json())
+           .then(data => {
+               if (data.ok) {
+                   if (data.state === 0) {
+                       toggleBtn.className = 'bi bi-circle toggle-state';
+                       toggleBtn.style.color = 'blue';
+                       toggleBtn.title = 'Open';
+                   } else {
+                       toggleBtn.className = 'bi bi-check-circle-fill toggle-state';
+                       toggleBtn.style.color = 'green';
+                       toggleBtn.title = 'Closed';
+                   }
+               }
+           });
+       }
+
+       let btn = e.target.closest(".delete-job");
+       if(btn) { deletejob(btn.closest("tr").dataset.jobid); }
+   });
+
+   function deletejob(jobid) {
+       xhr = new XMLHttpRequest();
+       xhr.open('POST', '{% url "deletejob" %}');
+       xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+       xhr.setRequestHeader("X-CSRFToken", '{{ csrf_token }}');
+       xhr.onreadystatechange = function() {
+           if(xhr.readyState == 4 && xhr.status == 200) {
+               window.location.reload();
+           }
+       };
+       xhr.send('jobid='+jobid);
+   }
+ </script>
+
+ </body>
+</html>

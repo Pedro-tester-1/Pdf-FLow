@@ -1,0 +1,222 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Versiones</title>
+  <link rel="stylesheet" href="{% static 'bootstrap/css/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <script src="{% static 'bootstrap/js/bootstrap.min.js' %}"></script>
+  <style>
+    .version-card { cursor: pointer; transition: box-shadow .2s; }
+    .version-card:hover { box-shadow: 0 0 0 2px #0d6efd44; }
+    .version-card.selected { border-color: #0d6efd; box-shadow: 0 0 0 2px #0d6efd88; }
+  </style>
+</head>
+<body>
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2>Versiones</h2>
+    {% if user.is_staff %}
+    <button class="btn btn-primary" id="btnNuevaVersion">
+      <i class="bi bi-plus-circle"></i> Nueva versión
+    </button>
+    {% endif %}
+  </div>
+
+  <div class="row">
+    <!-- Lista de versiones -->
+    <div class="col-md-4">
+      <div id="versionList">
+        {% for v in versions %}
+        <div class="card mb-2 version-card" data-versionid="{{ v.id }}" onclick="selectVersion(this)">
+          <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center">
+            <div>
+              <span class="fw-bold text-primary">{{ v.tag }}</span>
+              <small class="text-muted d-block">{{ v.date|date:"M d, Y" }}</small>
+              {% if v.description %}<small>{{ v.description }}</small>{% endif %}
+            </div>
+            {% if user.is_staff %}
+            <span class="text-danger delete-version" data-versionid="{{ v.id }}" title="Eliminar" style="cursor:pointer; font-size:1.1rem;" onclick="event.stopPropagation(); deleteVersion({{ v.id }}, this)">
+              <i class="bi bi-trash-fill"></i>
+            </span>
+            {% endif %}
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-muted" id="emptyMsg">No hay versiones aún.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Detalle + comentarios -->
+    <div class="col-md-8" id="versionDetail" style="display:none;">
+      <div class="card">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <span class="fw-bold fs-5" id="detailTag"></span>
+          <small class="text-muted" id="detailDate"></small>
+        </div>
+        <div class="card-body">
+          <p id="detailDesc" class="text-muted mb-3"></p>
+          <h6>Comentarios</h6>
+          <div id="comentariosList" style="max-height:300px; overflow-y:auto;" class="mb-3"></div>
+          <div class="input-group">
+            <input type="text" class="form-control" id="nuevoComentario" placeholder="Escribe un comentario...">
+            <button class="btn btn-outline-primary" id="btnEnviarComentario">
+              <i class="bi bi-send"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nueva versión -->
+<div class="modal fade" id="modalNuevaVersion" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nueva versión</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="versionError" class="alert alert-danger d-none"></div>
+        <div class="mb-2">
+          <label class="form-label">Tag (ej: V.0.1)</label>
+          <input type="text" class="form-control" id="versionTag" placeholder="V.0.1">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Descripción</label>
+          <textarea class="form-control" id="versionDesc" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnGuardarVersion">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let selectedVersionId = null;
+
+function deleteVersion(versionid, el) {
+  if (!confirm('¿Eliminar esta versión y sus comentarios?')) return;
+  fetch('{% url "delete_version" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': '{{ csrf_token }}' },
+    body: 'versionid=' + versionid
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      el.closest('.version-card').remove();
+      document.getElementById('versionDetail').style.display = 'none';
+      if (document.querySelectorAll('.version-card').length === 0) {
+        document.getElementById('versionList').innerHTML = '<p class="text-muted" id="emptyMsg">No hay versiones aún.</p>';
+      }
+    }
+  });
+}
+
+function selectVersion(card) {
+  document.querySelectorAll('.version-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  selectedVersionId = card.dataset.versionid;
+
+  fetch('{% url "version_detail" versionid=0 %}'.replace('0', selectedVersionId))
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('detailTag').textContent = data.tag;
+      document.getElementById('detailDate').textContent = '';
+      document.getElementById('detailDesc').textContent = data.description || 'Sin descripción.';
+      const list = document.getElementById('comentariosList');
+      list.innerHTML = data.comentarios.length === 0
+        ? '<p class="text-muted small">Sin comentarios aún.</p>'
+        : data.comentarios.map(c =>
+            `<div class="border-bottom pb-1 mb-1">
+              <small class="fw-semibold">${c.user}</small>
+              <small class="text-muted ms-1">${c.date}</small>
+              <p class="mb-0">${c.texto}</p>
+            </div>`
+          ).join('');
+      list.scrollTop = list.scrollHeight;
+      document.getElementById('versionDetail').style.display = '';
+    });
+}
+
+document.getElementById('btnEnviarComentario').onclick = function() {
+  const texto = document.getElementById('nuevoComentario').value.trim();
+  if (!texto || !selectedVersionId) return;
+
+  fetch('{% url "add_comentario" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': '{{ csrf_token }}' },
+    body: 'versionid=' + selectedVersionId + '&texto=' + encodeURIComponent(texto)
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      document.getElementById('nuevoComentario').value = '';
+      const list = document.getElementById('comentariosList');
+      const emptyMsg = list.querySelector('p.text-muted');
+      if (emptyMsg) emptyMsg.remove();
+      list.innerHTML += `<div class="border-bottom pb-1 mb-1">
+        <small class="fw-semibold">${data.user}</small>
+        <small class="text-muted ms-1">${data.date}</small>
+        <p class="mb-0">${data.texto}</p>
+      </div>`;
+      list.scrollTop = list.scrollHeight;
+    }
+  });
+};
+
+document.getElementById('nuevoComentario').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('btnEnviarComentario').click();
+});
+
+document.getElementById('btnNuevaVersion').onclick = function() {
+  document.getElementById('versionTag').value = '';
+  document.getElementById('versionDesc').value = '';
+  document.getElementById('versionError').classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('modalNuevaVersion')).show();
+};
+
+document.getElementById('btnGuardarVersion').onclick = function() {
+  const tag = document.getElementById('versionTag').value.trim();
+  const desc = document.getElementById('versionDesc').value.trim();
+  const errorDiv = document.getElementById('versionError');
+  if (!tag) { errorDiv.textContent = 'El tag es requerido.'; errorDiv.classList.remove('d-none'); return; }
+
+  fetch('{% url "create_version" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': '{{ csrf_token }}' },
+    body: 'tag=' + encodeURIComponent(tag) + '&description=' + encodeURIComponent(desc)
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('modalNuevaVersion')).hide();
+      const emptyMsg = document.getElementById('emptyMsg');
+      if (emptyMsg) emptyMsg.remove();
+      const card = document.createElement('div');
+      card.className = 'card mb-2 version-card';
+      card.dataset.versionid = data.id;
+      card.onclick = function() { selectVersion(this); };
+      card.innerHTML = `<div class="card-body py-2 px-3">
+        <span class="fw-bold text-primary">${data.tag}</span>
+        <small class="text-muted d-block">Hoy</small>
+        ${data.description ? `<small>${data.description}</small>` : ''}
+      </div>`;
+      document.getElementById('versionList').prepend(card);
+    } else {
+      errorDiv.textContent = data.error || 'Error al crear versión.';
+      errorDiv.classList.remove('d-none');
+    }
+  });
+};
+</script>
+</body>
+</html>
